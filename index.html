@@ -23,6 +23,7 @@
             --btn-bg: #4c51bf;
             --btn-hover-bg: #434190;
             --combo-color: #a546d1;
+            --hard-molecule-bg: #f56565; /* A distinct color for hard molecules */
         }
 
         body {
@@ -312,6 +313,13 @@
             transform: translateX(5px);
         }
 
+        #molecule-list li.hard-molecule {
+            background-color: var(--hard-molecule-bg);
+            color: var(--container-bg);
+            font-weight: 700;
+            transform: scale(1.05);
+        }
+        
         #molecule-list li .tally {
             font-weight: 700;
             color: var(--score-color);
@@ -401,7 +409,9 @@
             <li>Select adjacent elements (horizontally, vertically, or diagonally) to form a molecule.</li>
             <li>Once you form a valid molecule from today's list, the elements will be replaced.</li>
             <li>Each element in a valid molecule is worth <strong>10 points</strong>.</li>
-            <li>If you form the same molecule multiple times in a row, you get a combo bonus! The bonus starts at 5 points and increases with each consecutive find.</li>
+            <li>Find a **Hard Molecule** (highlighted in red) for a bonus of **100 points!**</li>
+            <li>If you find a molecule within **5 seconds** of your last one, you get a **50-point speed bonus!**</li>
+            <li>If you form the same molecule multiple times in a row, you get a **combo bonus!** The bonus starts at 5 points and increases with each consecutive find.</li>
             <li>You have 120 seconds to get the highest score you can!</li>
         </ul>
         <button id="close-rules-button" class="button">Close</button>
@@ -431,7 +441,10 @@
     const GAME_TIME = 120; // in seconds
     const ELEMENT_SCORE = 10;
     const COMBO_BONUS_INCREMENT = 5;
+    const SPEED_BONUS = 50;
+    const SPEED_BONUS_TIME_LIMIT = 5; // seconds
     const HIGH_SCORE_COUNT = 10;
+    const DAILY_MOLECULE_COUNT = 5;
     
     // Full list of all possible molecules for daily rotation
     const ALL_MOLECULES = [
@@ -444,6 +457,7 @@
         { name: 'Hydrogen Peroxide', elements: ['H', 'O', 'O', 'H'], description: 'Hydrogen peroxide is a chemical compound used as a mild antiseptic and a powerful oxidizing agent.' },
         { name: 'Hydrogen Sulfide', elements: ['H', 'S', 'H'], description: 'Hydrogen sulfide is a flammable, colorless gas with a characteristic odor of rotten eggs. It is toxic and corrosive.' },
         { name: 'Hydrofluoric Acid', elements: ['H', 'F'], description: 'Hydrofluoric acid is a highly corrosive acid used in the production of most fluorine-containing compounds.' },
+        { name: 'Sulfuric Acid', elements: ['H', 'H', 'S', 'O', 'O', 'O', 'O'], description: 'Sulfuric acid is a highly corrosive mineral acid. It is an important industrial chemical, produced in greater quantities than any other chemical.'},
     ];
     
     // Game state variables
@@ -454,6 +468,8 @@
     let gameActive = false;
     let gridData = [];
     let todayMolecules = [];
+    let hardMolecule = null;
+    let lastFoundMoleculeTime = null;
     let lastFoundMoleculeName = null;
     let currentComboCount = 0;
     let highScores = [];
@@ -514,11 +530,18 @@
         const today = new Date().toDateString();
         const random = seededRandom(today);
         
-        const shuffledMolecules = ALL_MOLECULES.slice().sort(() => random() - 0.5);
+        // Filter out hard molecules from the pool of regular ones
+        const regularMolecules = ALL_MOLECULES.filter(mol => mol.elements.length <= 5);
+        const shuffledRegular = regularMolecules.slice().sort(() => random() - 0.5);
         
-        const numToSelect = Math.floor(random() * 3) + 3; // Random number between 3 and 5
+        // Select a hard molecule for the day (one with more than 5 elements)
+        const hardCandidates = ALL_MOLECULES.filter(mol => mol.elements.length > 5);
+        hardMolecule = hardCandidates[Math.floor(random() * hardCandidates.length)];
+
+        todayMolecules = shuffledRegular.slice(0, DAILY_MOLECULE_COUNT - 1).map(mol => ({ ...mol, tally: 0 }));
         
-        todayMolecules = shuffledMolecules.slice(0, numToSelect).map(mol => ({ ...mol, tally: 0 }));
+        // Add the hard molecule to the daily list
+        todayMolecules.push({ ...hardMolecule, tally: 0 });
     }
 
     // Function to initialize the game
@@ -530,6 +553,8 @@
         lastFoundMoleculeName = null;
         currentComboCount = 0;
         gameActive = true;
+        lastFoundMoleculeTime = null;
+        hardMolecule = null;
         generateDailyMolecules(); // Generate today's unique molecules
         updateUI();
         updateMoleculesUI();
@@ -555,6 +580,11 @@
             const moleculeElements = mol.elements.join('-');
             const moleculeTally = mol.tally;
             listItem.innerHTML = `<span><strong>${moleculeName}</strong><br>(${moleculeElements})</span><span class="tally">${moleculeTally}</span>`;
+            
+            if (hardMolecule && mol.name === hardMolecule.name) {
+                listItem.classList.add('hard-molecule');
+            }
+
             // Add a data attribute to easily retrieve the molecule name
             listItem.dataset.moleculeName = moleculeName;
             moleculeList.appendChild(listItem);
@@ -664,6 +694,8 @@
         
         if (found) {
             handleSuccess(foundMolecule);
+        } else if (selectedElements.length === 8) { // Max length is 7 for Sulfuric Acid
+             clearSelection();
         }
     }
     
@@ -674,8 +706,21 @@
         successSound.currentTime = 0;
         successSound.play();
         
-        let points = selectedElements.length * ELEMENT_SCORE;
+        // Calculate points based on if it's the hard molecule or not
+        let points = hardMolecule && molecule.name === hardMolecule.name ? 100 : selectedElements.length * ELEMENT_SCORE;
         score += points;
+
+        // Check for speed bonus
+        let bonusText = '';
+        if (lastFoundMoleculeTime) {
+            const timeSinceLastFind = (Date.now() - lastFoundMoleculeTime) / 1000;
+            if (timeSinceLastFind <= SPEED_BONUS_TIME_LIMIT) {
+                score += SPEED_BONUS;
+                bonusText = `+${SPEED_BONUS} Speed Bonus!`;
+            }
+        }
+        lastFoundMoleculeTime = Date.now();
+
 
         if (lastFoundMoleculeName === molecule.name) {
             currentComboCount++;
@@ -687,7 +732,11 @@
         if (currentComboCount > 1) {
             comboBonus = currentComboCount * COMBO_BONUS_INCREMENT;
             score += comboBonus;
-            showComboBonus(comboBonus);
+            bonusText += (bonusText ? ' & ' : '') + `+${comboBonus} Combo!`;
+        }
+
+        if (bonusText) {
+            showBonusText(bonusText);
         }
 
         lastFoundMoleculeName = molecule.name;
@@ -716,14 +765,14 @@
     }
     
     // Shows a floating combo bonus text
-    function showComboBonus(bonus) {
-        const comboText = document.createElement('span');
-        comboText.textContent = `+${bonus} Combo!`;
-        comboText.classList.add('combo-text');
-        gameGrid.appendChild(comboText);
+    function showBonusText(text) {
+        const bonusText = document.createElement('span');
+        bonusText.textContent = text;
+        bonusText.classList.add('combo-text');
+        gameGrid.appendChild(bonusText);
 
         setTimeout(() => {
-            gameGrid.removeChild(comboText);
+            gameGrid.removeChild(bonusText);
         }, 1000);
     }
 
