@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Elemental by Azuberkelium</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; }
+  canvas { border: 1px solid #ccc; display: block; margin: auto; }
+  #score, #timer { font-size: 1.2em; margin: 10px; }
+  .popup {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 1em;
+    border: 2px solid #444;
+    z-index: 100;
+  }
+  .popup.visible { display: block; }
+  ol { text-align: left; }
+</style>
+</head>
+<body>
+
+<h1>Elemental by Azuberkelium</h1>
+<canvas id="pathCanvas" width="420" height="420"></canvas>
+<div id="score">Score: 0</div>
+<div id="timer">Time: 90</div>
+
+<div id="message-box" class="popup">
+  <h2 id="message-title"></h2>
+  <p id="message-text"></p>
+  <button id="message-button">OK</button>
+</div>
+
+<div id="high-score-box" class="popup">
+  <h2>Global High Scores</h2>
+  <ol id="high-score-list"></ol>
+  <button id="close-high-score-button">Close</button>
+</div>
+
+<script>
+const GAME_TIME = 90;
+const HIGH_SCORE_COUNT = 10;
+const gridSize = 8;
+const cellSize = 50;
+
+let score = 0;
+let timeLeft = GAME_TIME;
+let timerInterval;
+let gameActive = false;
+let selectedElements = [];
+let grid = [];
+let targetMolecules = ["H2O", "CO2", "O2"]; // example molecules
+const pathCanvas = document.getElementById('pathCanvas');
+const ctx = pathCanvas.getContext('2d');
+
+const scoreDisplay = document.getElementById('score');
+const timerDisplay = document.getElementById('timer');
+const messageBox = document.getElementById('message-box');
+const messageTitle = document.getElementById('message-title');
+const messageText = document.getElementById('message-text');
+const messageButton = document.getElementById('message-button');
+const highScoreBox = document.getElementById('high-score-box');
+const highScoreList = document.getElementById('high-score-list');
+const closeHighScoreButton = document.getElementById('close-high-score-button');
+
+function updateUI() {
+    scoreDisplay.textContent = `Score: ${score}`;
+    timerDisplay.textContent = `Time: ${timeLeft}`;
+}
+
+function startTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft < 0) timeLeft = 0;
+        updateUI();
+        if (timeLeft === 0) endGame();
+    }, 1000);
+}
+
+function endGame() {
+    clearInterval(timerInterval);
+    gameActive = false;
+    const playerName = prompt("Game Over! Enter your name for the leaderboard:", "Player") || "Anonymous";
+    addGlobalHighScore({ name: playerName, score });
+    showMessage('Game Over!', `Your final score is: ${score}`);
+}
+
+function showMessage(title, text) {
+    messageTitle.textContent = title;
+    messageText.textContent = text;
+    messageBox.classList.add('visible');
+}
+
+function addGlobalHighScore(entry) {
+    const stored = localStorage.getItem('elementalGlobalHighScores');
+    const highScores = stored ? JSON.parse(stored) : [];
+    highScores.push(entry);
+    highScores.sort((a, b) => b.score - a.score);
+    const topScores = highScores.slice(0, HIGH_SCORE_COUNT);
+    localStorage.setItem('elementalGlobalHighScores', JSON.stringify(topScores));
+    renderGlobalHighScores();
+}
+
+function renderGlobalHighScores() {
+    const stored = localStorage.getItem('elementalGlobalHighScores');
+    const highScores = stored ? JSON.parse(stored) : [];
+    highScoreList.innerHTML = '';
+    if (highScores.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No scores yet!';
+        highScoreList.appendChild(li);
+    } else {
+        highScores.forEach((entry, idx) => {
+            const li = document.createElement('li');
+            li.textContent = `${idx + 1}. ${entry.name}: ${entry.score}`;
+            if (idx === 0) {
+                li.style.backgroundColor = '#ecc94b';
+                li.style.fontWeight = '700';
+                li.style.transform = 'scale(1.05)';
+            }
+            highScoreList.appendChild(li);
+        });
+    }
+}
+
+function validateMoleculeAvailability() {
+    let count = 0;
+    for (let cell of grid) {
+        if (targetMolecules.includes(cell)) {
+            count++;
+        }
+    }
+    if (count < 2) {
+        console.log("Not enough molecules, regenerating grid...");
+        generateGrid();
+        validateMoleculeAvailability();
+    }
+}
+
+function generateGrid() {
+    grid = [];
+    const elements = ["H2O", "CO2", "O2", "N2", "CH4", "NaCl"]; // example pool
+    for (let i = 0; i < gridSize * gridSize; i++) {
+        const rand = Math.floor(Math.random() * elements.length);
+        grid.push(elements[rand]);
+    }
+    drawGrid();
+}
+
+function drawGrid() {
+    ctx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(c * (cellSize + 2), r * (cellSize + 2), cellSize, cellSize);
+            ctx.fillStyle = '#333';
+            ctx.font = "12px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(grid[r * gridSize + c], c * (cellSize + 2) + cellSize / 2, r * (cellSize + 2) + cellSize / 2);
+        }
+    }
+}
+
+function drawPath() {
+    ctx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+    drawGrid();
+    if (selectedElements.length < 2) return;
+    ctx.strokeStyle = '#f00';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const startIndex = selectedElements[0];
+    const startCol = startIndex % gridSize;
+    const startRow = Math.floor(startIndex / gridSize);
+    const startX = startCol * (cellSize + 2) + cellSize / 2;
+    const startY = startRow * (cellSize + 2) + cellSize / 2;
+    ctx.moveTo(startX, startY);
+    for (let i = 1; i < selectedElements.length; i++) {
+        const index = selectedElements[i];
+        const col = index % gridSize;
+        const row = Math.floor(index / gridSize);
+        const x = col * (cellSize + 2) + cellSize / 2;
+        const y = row * (cellSize + 2) + cellSize / 2;
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
+
+messageButton.addEventListener('click', () => {
+    messageBox.classList.remove('visible');
+    initGame();
+});
+
+closeHighScoreButton.addEventListener('click', () => {
+    highScoreBox.classList.remove('visible');
+});
+
+function initGame() {
+    score = 0;
+    timeLeft = GAME_TIME;
+    selectedElements = [];
+    updateUI();
+    generateGrid();
+    validateMoleculeAvailability();
+    gameActive = true;
+    startTimer();
+}
+
+window.onload = initGame;
+</script>
+</body>
+</html>
