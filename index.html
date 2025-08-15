@@ -1,216 +1,1138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Elemental by Azuberkelium</title>
-<style>
-  body { font-family: Arial, sans-serif; text-align: center; }
-  canvas { border: 1px solid #ccc; display: block; margin: auto; }
-  #score, #timer { font-size: 1.2em; margin: 10px; }
-  .popup {
-    display: none;
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 1em;
-    border: 2px solid #444;
-    z-index: 100;
-  }
-  .popup.visible { display: block; }
-  ol { text-align: left; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elemental by Azuberkelium</title>
+    <!-- Use a modern font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1a202c;
+            --container-bg: #2d3748;
+            --text-color: #e2e8f0;
+            --grid-bg: #4a5568;
+            --element-bg: #a0aec0;
+            --element-hover-bg: #cbd5e0;
+            --selected-bg: #38a169;
+            --score-color: #ecc94b;
+            --timer-color: #f56565;
+            --line-color: #48bb78;
+            --btn-bg: #4c51bf;
+            --btn-hover-bg: #434190;
+            --combo-color: #a546d1;
+            --hard-molecule-bg: #f56565; /* A distinct color for hard molecules */
+            --hint-color: #3182ce;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 900px;
+            background-color: var(--container-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            font-size: 1.25rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        #score, #timer {
+            background-color: var(--grid-bg);
+            padding: 8px 16px;
+            border-radius: 8px;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        #score { color: var(--score-color); }
+        #timer { color: var(--timer-color); }
+
+        .game-main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            gap: 20px;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            background-color: var(--grid-bg);
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            aspect-ratio: 5/7; /* Maintain aspect ratio */
+        }
+        
+        .element {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding-top: 100%;
+            position: relative;
+            background-color: var(--element-bg);
+            border-radius: 12px;
+            font-size: clamp(1rem, 4vw, 1.5rem);
+            font-weight: 700;
+            color: var(--container-bg);
+            cursor: pointer;
+            transition: transform 0.1s ease, background-color 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .element-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .element:hover:not(.selected):not(.found) {
+            background-color: var(--element-hover-bg);
+            transform: scale(1.05);
+        }
+
+        .element.selected {
+            background-color: var(--selected-bg);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .element.found {
+            animation: foundAnimation 0.5s ease-out forwards;
+            pointer-events: none;
+        }
+        
+        .element.hinted {
+            animation: hintAnimation 1.5s infinite;
+        }
+
+        @keyframes foundAnimation {
+            0% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        @keyframes hintAnimation {
+            0% { background-color: var(--element-bg); }
+            50% { background-color: var(--hint-color); }
+            100% { background-color: var(--element-bg); }
+        }
+
+        .combo-text {
+            position: absolute;
+            bottom: 20%;
+            left: 50%;
+            transform: translate(-50%, 0);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--combo-color);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            animation: fadeOutUp 1s ease-out forwards;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        @keyframes fadeOutUp {
+            0% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -50px); }
+        }
+
+        #path-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .footer {
+            margin-top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color);
+            background-color: var(--btn-bg);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .button:hover {
+            background-color: var(--btn-hover-bg);
+            transform: translateY(-2px);
+        }
+
+        .message-box, .rules-box, .info-box, .high-score-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background-color: var(--container-bg);
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .message-box.visible, .rules-box.visible, .info-box.visible, .high-score-box.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+        }
+
+        .message-box h2, .rules-box h2, .info-box h2, .high-score-box h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+
+        .message-box p, .rules-box p, .info-box p, .high-score-box p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+        }
+
+        .rules-box p, .info-box p {
+            text-align: left;
+            margin-bottom: 10px;
+        }
+
+        .rules-box ul {
+            text-align: left;
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .rules-box li {
+            margin-bottom: 10px;
+        }
+
+        /* Styles for the new sidebar layout */
+        .game-main {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+
+        #molecules-sidebar {
+            width: 100%;
+            max-width: 300px;
+            background-color: var(--grid-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        #molecules-sidebar h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        #molecule-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #molecule-list li {
+            background-color: var(--container-bg);
+            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s ease, background-color 0.2s ease;
+        }
+
+        #molecule-list li:hover {
+            background-color: #3f4a5b;
+            transform: translateX(5px);
+        }
+
+        #molecule-list li.hard-molecule {
+            background-color: var(--hard-molecule-bg);
+            color: var(--container-bg);
+            font-weight: 700;
+            transform: scale(1.05);
+        }
+        
+        #molecule-list li .tally {
+            font-weight: 700;
+            color: var(--score-color);
+            background-color: var(--grid-bg);
+            padding: 4px 8px;
+            border-radius: 50%;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        #high-score-list {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+        }
+
+        #high-score-list li {
+            background-color: var(--grid-bg);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.1rem;
+        }
+        
+        #high-score-list li:first-child {
+            background-color: #ecc94b;
+            color: #2d3748;
+            font-weight: 700;
+            transform: scale(1.05);
+        }
+
+
+        /* Responsive styles for smaller screens */
+        @media (max-width: 768px) {
+            .game-main {
+                flex-direction: column;
+            }
+            .title {
+                font-size: 2rem;
+            }
+        }
+    </style>
 </head>
 <body>
 
-<h1>Elemental by Azuberkelium</h1>
-<canvas id="pathCanvas" width="420" height="420"></canvas>
-<div id="score">Score: 0</div>
-<div id="timer">Time: 90</div>
+<div class="game-container">
+    <div class="header">
+        <div class="title">Elemental by Azuberkelium</div>
+        <div class="info-bar">
+            <div id="score">Score: 0</div>
+            <div id="timer">Time: 60</div>
+        </div>
+    </div>
+    
+    <div class="game-main">
+        <div id="molecules-sidebar">
+            <h3>Today's Molecules</h3>
+            <ul id="molecule-list"></ul>
+        </div>
+        <div class="game-area">
+            <canvas id="path-canvas"></canvas>
+            <div id="game-grid"></div>
+        </div>
+    </div>
 
-<div id="message-box" class="popup">
-  <h2 id="message-title"></h2>
-  <p id="message-text"></p>
-  <button id="message-button">OK</button>
-</div>
+    <div class="footer">
+        <button id="reset-button" class="button">Reset Game</button>
+        <button id="rules-button" class="button">Rules</button>
+        <button id="high-score-button" class="button">High Scores</button>
+    </div>
 
-<div id="high-score-box" class="popup">
-  <h2>Global High Scores</h2>
-  <ol id="high-score-list"></ol>
-  <button id="close-high-score-button">Close</button>
+    <!-- Game Over Message Box -->
+    <div id="message-box" class="message-box">
+        <h2 id="message-title"></h2>
+        <p id="message-text"></p>
+        <button id="message-button" class="button">Play Again</button>
+    </div>
+
+    <!-- Rules Box -->
+    <div id="rules-box" class="rules-box">
+        <h2>Rules</h2>
+        <p>Your goal is to find molecules hidden in the grid of elements.</p>
+        <ul>
+            <li>Select adjacent elements (horizontally, vertically, or diagonally) to form a molecule.</li>
+            <li>Once you form a valid molecule from today's list, the elements will be replaced.</li>
+            <li>Each element in a valid molecule is worth <strong>10 points</strong>.</li>
+            <li>If you form the same molecule multiple times in a row, you get a combo bonus! The bonus starts at 5 points and increases with each consecutive find.</li>
+            <li>You have 60 seconds to get the highest score you can!</li>
+        </ul>
+        <button id="close-rules-button" class="button">Close</button>
+    </div>
+
+    <!-- Molecule Info Box -->
+    <div id="info-box" class="info-box">
+        <h2 id="info-title"></h2>
+        <p id="info-text"></p>
+        <button id="close-info-button" class="button">Close</button>
+    </div>
+
+    <!-- High Score Box -->
+    <div id="high-score-box" class="high-score-box">
+        <h2>High Scores</h2>
+        <ul id="high-score-list"></ul>
+        <button id="close-high-score-button" class="button">Close</button>
+    </div>
+
+    <audio id="success-sound" src="data:audio/wav;base64,UklGRl9QDQBXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YSNQDQAAAP8ASQD0AE4AkwCaAFYA8gBPAI4AaQCPAFUAnwCOACcAcgB8AJMA/wBfAP8AKwB/APUAawCQAEoAhQBqAMgAUwClAM0ANwCDACgA1AAuANwAyQAuAMIA1ADmADgAjwCkAI8ASgBJAFIATgCHAG4AsQA4AQAyAF8AZgCEAH4A1QCaACsA2AAjAIcAmwBeANAAcgCuAJoAigC9ANQAPQD9AC8AwgD2ACcAqQCcAKkAmwCeALIAowBqAPcAkwCeAFIApwDLAHEAugA9AJIAcwDQAJoAygBuAHcAegB+AIgAqgCUAJkArAC0AMgANgCQAG4ApwCkANwAcgCQAKgAlgC6AMgAugCgAEoAcwA2AJAAoQCOAIoAgwC6AL4AvgCqAKQAVQB2ADcAMQBqAMoAkwC6AP8AugCRAKkAnQBSAMgAuQD5AHMAfQCjAEMAyACrAPcAvgBzAJ0AcQBaAP8AMABjAMIAiACPAIoAngB5AMIAcgBaAE4AMwDQAJYARgCeAMoAlwCWAEMAvgC5AH0AiwDOAKgAqQCtAKcAtACWAJ4AcgBqAMIAgwBaAMoARQB2AEwAggCPAKoAlwCOALgA7gBOAPUAuQA3AKcAjQB6AP8A/AN8AigCEAP8AvACtAKIAjwCjAKsAMQCpAMcANQD3AJoAfgCBAKQA5gAuANAAiACWAJEAoQDOAGYAbgCEAHoA1gBiAKoAvQCJAJAA9gD3AMUAxQA/ANoAWwC8AB8A3wBOAGoAdgBiAOoA/wAvAFkATgD9AE8A4ABOAFIA/wD7APcA+wC0ADsA8gDaANQAWwDeAKsAgwAyAOAA3gBvADkAwQAjAP8AZgD/AEsA9gAaAAsARgBiAEEAQACVAFcAZgB/AP8A/wBOAEoAUQByAFQAYgCcAFkAeQAqADsAiwB3AMIA3wDJAJoAnwB1AJYAcgD2AJAAdgCcAKQA/wBfADcAUwCGAD0AfgBuAGUA+wCQAMkAPgDqAC8AkgDDAJoAgwAyAJwAYgCQAP8ARgB+APcACwDbAMoAmwDLAOIAxQCqAI8ARwCcAKsAQwB8AFEAVQB9AGIAUwCOAGIA2AAjAMoAugDKAKkAugCxAGgA3gDJAJIACwDYAMkANwDqADkA3wDvAPgAUwC6ADsAjQB5AMoAZgDuAMgAbgDQAJUAcgBaANwA/wDzAJoAswCOAP8AowDyAFIAgwCUAJ8A/wBqAGgAcgD/AJoA3ACoAIYAawBeAI8AyQB0AMsAkwDDAJsA/wDyAMkAfwB3AE4A/wCkAJwAYgD1AP8AqACUAC8AtADpAG4A2wCMAJsApgDaAD0AcgBuAMgAvgDyAMkAIwD0ANoAEwDqAI8AZgC6AFEAnwCgANAA9wDuAG0A1wB1AI8A/wC5AMkAIwDwAMoAnACoAPcAMwB9AIoACwD7AG8AngDyAEoA/wAyAPUA3wA+AJoAcgDPAHYAugCeAJoAfwA3APUA5gDJAMoAbgC2AMsAbgCOAHIA1gD9AMoAYwCRAKcAeQDGAIsAVwDFAKoA9gB3AP8A/wB9ANwA/wAyANwAbgD3AIcAIwDcAKsARwD9AEsAdgCKANwAIwDUAJgACgDJAH0ASgCPAJwACwD6AKoAwgCPAHYA1ADjAGQAjwC8ALsAbgDJAEwAigCFAHgARgD5ADsAswDKAOAA/wD/AL0AcgCPAJAA6gCOAIgARgDaAC8AZgA3APUA3wCaAKcAkwD1AM4A/wCOAIoATAC6AMoAhgCSAEoAgwCOAJIAiACeANwASgCOAKIAoQCOAMoANwDcAC8A7gA3AMgA/wCwAMIAkwD9ALcAhwDoAG0ATwD0AMgASwDsAGIAzwCKAPgAvgC/AHMAVQA/ALsA/wA3AGIA/wDLAJEAbwDGAIsAWwCjAMoAEwC8ANQAUwDsAJoAYwDLAAYAuACWAGIA0gD/ALQAvQBeAIsA1gBqAK8AfgC3AJQAOAD1AP8AqwBaAI8A5gA4AGoAYgCFAHYARwC2AIoAEwDFAKoAzgCcANwA4gCOANwASgDuALcARwDQAJoAjwDyAHIA9QCLAPgAqwD/AHoA/=="></audio>
 </div>
 
 <script>
-const GAME_TIME = 90;
-const HIGH_SCORE_COUNT = 10;
-const gridSize = 8;
-const cellSize = 50;
+    // Constants for game settings
+    const ROWS = 7;
+    const COLS = 5;
+    const GAME_TIME = 60; // in seconds
+    const ELEMENT_SCORE = 10;
+    const COMBO_BONUS_INCREMENT = 5;
+    const SPEED_BONUS = 50;
+    const SPEED_BONUS_TIME_LIMIT = 5; // seconds
+    const HINT_TIMER_DELAY = 7000; // 7 seconds in milliseconds
+    const HIGH_SCORE_COUNT = 10;
+    const MOLECULE_COUNT = 5; // Fixed number of molecules to show
+    
+    // Full list of all possible molecules for daily rotation
+    const ALL_MOLECULES = [
+        { name: 'Water', elements: ['H', 'O', 'H'], description: 'Water is a compound of hydrogen and oxygen. It is essential for all known forms of life.' },
+        { name: 'Oxygen', elements: ['O', 'O'], description: 'Oxygen is a colorless, odorless, tasteless gas essential to living organisms.' },
+        { name: 'Carbon Dioxide', elements: ['C', 'O', 'O'], description: 'Carbon dioxide is a colorless gas with a faint, sharp odor and a sour taste. It is an important greenhouse gas.' },
+        { name: 'Methane', elements: ['C', 'H', 'H', 'H', 'H'], description: 'Methane is the main component of natural gas. It is a powerful greenhouse gas and a major fuel source.' },
+        { name: 'Ammonia', elements: ['N', 'H', 'H', 'H'], description: 'Ammonia is a colorless gas with a pungent smell. It is used in many industrial and household cleaning products.' },
+        { name: 'Sodium Chloride', elements: ['Na', 'Cl'], description: 'Sodium chloride, commonly known as table salt, is an ionic compound essential for animal life.' },
+        { name: 'Hydrogen Peroxide', elements: ['H', 'O', 'O', 'H'], description: 'Hydrogen peroxide is a chemical compound used as a mild antiseptic and a powerful oxidizing agent.' },
+        { name: 'Hydrogen Sulfide', elements: ['H', 'S', 'H'], description: 'Hydrogen sulfide is a flammable, colorless gas with a characteristic odor of rotten eggs. It is toxic and corrosive.' },
+        { name: 'Hydrofluoric Acid', elements: ['H', 'F'], description: 'Hydrofluoric acid is a highly corrosive acid used in the production of most fluorine-containing compounds.' },
+        { name: 'Sulfuric Acid', elements: ['H', 'H', 'S', 'O', 'O', 'O', 'O'], description: 'Sulfuric acid is a highly corrosive mineral acid. It is an important industrial chemical, produced in greater quantities than any other chemical.'},
+    ];
+    
+    // Game state variables
+    let score = 0;
+    let timeLeft = GAME_TIME;
+    let timerInterval;
+    let hintTimerInterval;
+    let selectedElements = [];
+    let gameActive = false;
+    let gridData = [];
+    let todayMolecules = [];
+    let hardMolecule = null;
+    let lastFoundMoleculeTime = null;
+    let lastFoundMoleculeName = null;
+    let currentComboCount = 0;
+    let highScores = [];
+    
+    const gameGrid = document.getElementById('game-grid');
+    const scoreDisplay = document.getElementById('score');
+    const timerDisplay = document.getElementById('timer');
+    const resetButton = document.getElementById('reset-button');
+    const rulesButton = document.getElementById('rules-button');
+    const highScoreButton = document.getElementById('high-score-button');
+    const closeRulesButton = document.getElementById('close-rules-button');
+    const pathCanvas = document.getElementById('path-canvas');
+    const successSound = document.getElementById('success-sound');
+    const messageBox = document.getElementById('message-box');
+    const messageTitle = document.getElementById('message-title');
+    const messageText = document.getElementById('message-text');
+    const messageButton = document.getElementById('message-button');
+    const rulesBox = document.getElementById('rules-box');
+    const moleculeList = document.getElementById('molecule-list');
+    
+    // New elements for the info box
+    const infoBox = document.getElementById('info-box');
+    const infoTitle = document.getElementById('info-title');
+    const infoText = document.getElementById('info-text');
+    const closeInfoButton = document.getElementById('close-info-button');
 
-let score = 0;
-let timeLeft = GAME_TIME;
-let timerInterval;
-let gameActive = false;
-let selectedElements = [];
-let grid = [];
-let targetMolecules = ["H2O", "CO2", "O2"]; // example molecules
-const pathCanvas = document.getElementById('pathCanvas');
-const ctx = pathCanvas.getContext('2d');
+    // New elements for the high score box
+    const highScoreBox = document.getElementById('high-score-box');
+    const highScoreList = document.getElementById('high-score-list');
+    const closeHighScoreButton = document.getElementById('close-high-score-button');
+    
+    const ctx = pathCanvas.getContext('2d');
 
-const scoreDisplay = document.getElementById('score');
-const timerDisplay = document.getElementById('timer');
-const messageBox = document.getElementById('message-box');
-const messageTitle = document.getElementById('message-title');
-const messageText = document.getElementById('message-text');
-const messageButton = document.getElementById('message-button');
-const highScoreBox = document.getElementById('high-score-box');
-const highScoreList = document.getElementById('high-score-list');
-const closeHighScoreButton = document.getElementById('close-high-score-button');
+    // --- Core Game Functions ---
 
-function updateUI() {
-    scoreDisplay.textContent = `Score: ${score}`;
-    timerDisplay.textContent = `Time: ${timeLeft}`;
-}
+    /**
+     * A pseudo-random number generator function seeded by the current date.
+     * This ensures the same random sequence is generated every day.
+     * @param {string} seedString - A string to seed the generator, e.g., '2024-05-30'.
+     * @returns {function} A function that returns a pseudo-random number between 0 and 1.
+     */
+    function seededRandom(seedString) {
+        let seed = 0;
+        for (let i = 0; i < seedString.length; i++) {
+            seed += seedString.charCodeAt(i);
+        }
+        return function() {
+            seed = (seed * 9301 + 49297) % 233280;
+            return seed / 233280;
+        };
+    }
+    
+    /**
+     * Generates a new list of unique molecules for the day.
+     */
+    function generateDailyMolecules() {
+        const today = new Date().toDateString();
+        const random = seededRandom(today);
+        
+        let uniqueMolecules = [];
+        let moleculesToPickFrom = [...ALL_MOLECULES];
+        
+        // Ensure there are enough molecules to pick from
+        const numToPick = Math.min(ALL_MOLECULES.length, MOLECULE_COUNT);
+        
+        for(let i = 0; i < numToPick; i++) {
+            const randomIndex = Math.floor(random() * moleculesToPickFrom.length);
+            uniqueMolecules.push(moleculesToPickFrom[randomIndex]);
+            moleculesToPickFrom.splice(randomIndex, 1);
+        }
+        
+        todayMolecules = uniqueMolecules.map(mol => ({ ...mol, tally: 0 }));
 
-function startTimer() {
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        timeLeft--;
-        if (timeLeft < 0) timeLeft = 0;
+        // Identify the hard molecule if one was selected
+        hardMolecule = todayMolecules.find(mol => mol.elements.length > 5) || null;
+    }
+
+    // Function to initialize the game
+    function initGame() {
+        score = 0;
+        timeLeft = GAME_TIME;
+        selectedElements = [];
+        gridData = [];
+        lastFoundMoleculeName = null;
+        currentComboCount = 0;
+        gameActive = true;
+        lastFoundMoleculeTime = null;
+        hardMolecule = null;
+        generateDailyMolecules();
         updateUI();
-        if (timeLeft === 0) endGame();
-    }, 1000);
-}
+        updateMoleculesUI();
+        generateSolvableGrid(); // Changed to a function that guarantees a solvable grid
+        startTimer();
+        resetHintTimer();
+        hideAllPopups(); // Hide all popups at the start
+        clearCanvas();
+        loadHighScores(); // Load high scores on game initialization
+    }
+    
+    // Function to update the game's UI (score, timer)
+    function updateUI() {
+        scoreDisplay.textContent = `Score: ${score}`;
+        timerDisplay.textContent = `Time: ${timeLeft}`;
+    }
 
-function endGame() {
-    clearInterval(timerInterval);
-    gameActive = false;
-    const playerName = prompt("Game Over! Enter your name for the leaderboard:", "Player") || "Anonymous";
-    addGlobalHighScore({ name: playerName, score });
-    showMessage('Game Over!', `Your final score is: ${score}`);
-}
-
-function showMessage(title, text) {
-    messageTitle.textContent = title;
-    messageText.textContent = text;
-    messageBox.classList.add('visible');
-}
-
-function addGlobalHighScore(entry) {
-    const stored = localStorage.getItem('elementalGlobalHighScores');
-    const highScores = stored ? JSON.parse(stored) : [];
-    highScores.push(entry);
-    highScores.sort((a, b) => b.score - a.score);
-    const topScores = highScores.slice(0, HIGH_SCORE_COUNT);
-    localStorage.setItem('elementalGlobalHighScores', JSON.stringify(topScores));
-    renderGlobalHighScores();
-}
-
-function renderGlobalHighScores() {
-    const stored = localStorage.getItem('elementalGlobalHighScores');
-    const highScores = stored ? JSON.parse(stored) : [];
-    highScoreList.innerHTML = '';
-    if (highScores.length === 0) {
-        const li = document.createElement('li');
-        li.textContent = 'No scores yet!';
-        highScoreList.appendChild(li);
-    } else {
-        highScores.forEach((entry, idx) => {
-            const li = document.createElement('li');
-            li.textContent = `${idx + 1}. ${entry.name}: ${entry.score}`;
-            if (idx === 0) {
-                li.style.backgroundColor = '#ecc94b';
-                li.style.fontWeight = '700';
-                li.style.transform = 'scale(1.05)';
+    // Updates the molecule list on the side
+    function updateMoleculesUI() {
+        moleculeList.innerHTML = '';
+        todayMolecules.forEach(mol => {
+            const listItem = document.createElement('li');
+            const moleculeName = mol.name;
+            const moleculeElements = mol.elements.join('-');
+            const moleculeTally = mol.tally;
+            listItem.innerHTML = `<span><strong>${moleculeName}</strong><br>(${moleculeElements})</span><span class="tally">${moleculeTally}</span>`;
+            
+            if (hardMolecule && mol.name === hardMolecule.name) {
+                listItem.classList.add('hard-molecule');
             }
-            highScoreList.appendChild(li);
+
+            // Add a data attribute to easily retrieve the molecule name
+            listItem.dataset.moleculeName = moleculeName;
+            moleculeList.appendChild(listItem);
         });
     }
-}
 
-function validateMoleculeAvailability() {
-    let count = 0;
-    for (let cell of grid) {
-        if (targetMolecules.includes(cell)) {
-            count++;
+    /**
+     * Dynamically generates a weighted list of elements based on today's molecules.
+     * This makes the elements needed for today's molecules more common.
+     */
+    function getWeightedElements() {
+        const baseElements = ['H', 'O', 'C', 'N', 'S', 'P', 'F', 'Cl', 'Na'];
+        let weightedList = [...baseElements]; // Start with the base list
+        
+        const requiredElements = new Set();
+        todayMolecules.forEach(mol => {
+            mol.elements.forEach(el => requiredElements.add(el));
+        });
+
+        // Add extra copies of required elements to the weighted list
+        requiredElements.forEach(el => {
+            for (let i = 0; i < 3; i++) { // Add 3 extra copies for higher probability
+                weightedList.push(el);
+            }
+        });
+
+        return weightedList;
+    }
+    
+    // Function to generate a random element from the weighted list
+    function getRandomElement() {
+        const weightedList = getWeightedElements();
+        return weightedList[Math.floor(Math.random() * weightedList.length)];
+    }
+    
+    /**
+     * Generates a new grid and ensures it is solvable.
+     * The grid will be regenerated until at least two instances of a findable molecule are present.
+     */
+    function generateSolvableGrid() {
+        let attempts = 0;
+        let isSolvable = false;
+        while (!isSolvable) {
+            gameGrid.innerHTML = '';
+            gridData = [];
+            for (let row = 0; row < ROWS; row++) {
+                gridData[row] = [];
+                for (let col = 0; col < COLS; col++) {
+                    const element = getRandomElement();
+                    gridData[row][col] = element;
+                }
+            }
+            isSolvable = findGridSolutions().length >= 2;
+            attempts++;
+            if (attempts > 50) { // Failsafe to prevent infinite loops, though unlikely
+                console.warn("Could not find a solvable grid after 50 attempts.");
+                break;
+            }
+        }
+
+        // Now, render the final, solvable grid
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                const elementDiv = document.createElement('div');
+                elementDiv.classList.add('element');
+                elementDiv.dataset.row = row;
+                elementDiv.dataset.col = col;
+                elementDiv.innerHTML = `<span class="element-content">${gridData[row][col]}</span>`;
+                gameGrid.appendChild(elementDiv);
+            }
         }
     }
-    if (count < 2) {
-        console.log("Not enough molecules, regenerating grid...");
-        generateGrid();
-        validateMoleculeAvailability();
-    }
-}
 
-function generateGrid() {
-    grid = [];
-    const elements = ["H2O", "CO2", "O2", "N2", "CH4", "NaCl"]; // example pool
-    for (let i = 0; i < gridSize * gridSize; i++) {
-        const rand = Math.floor(Math.random() * elements.length);
-        grid.push(elements[rand]);
-    }
-    drawGrid();
-}
+    // Function to handle the selection of an element
+    function selectElement(elementDiv) {
+        if (!gameActive) return;
+        
+        const row = parseInt(elementDiv.dataset.row);
+        const col = parseInt(elementDiv.dataset.col);
+        const elementSymbol = gridData[row][col];
+        
+        const lastSelected = selectedElements[selectedElements.length - 1];
 
-function drawGrid() {
-    ctx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            ctx.strokeStyle = '#000';
-            ctx.strokeRect(c * (cellSize + 2), r * (cellSize + 2), cellSize, cellSize);
-            ctx.fillStyle = '#333';
-            ctx.font = "12px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(grid[r * gridSize + c], c * (cellSize + 2) + cellSize / 2, r * (cellSize + 2) + cellSize / 2);
+        if (selectedElements.length > 0) {
+            const isAdjacent = Math.abs(lastSelected.row - row) <= 1 && Math.abs(lastSelected.col - col) <= 1;
+            if (!isAdjacent) {
+                clearSelection();
+                return;
+            }
+        }
+
+        if (selectedElements.some(el => el.row === row && el.col === col)) {
+             clearSelection();
+             return;
+        }
+
+        selectedElements.push({
+            element: elementSymbol,
+            div: elementDiv,
+            row: row,
+            col: col
+        });
+
+        elementDiv.classList.add('selected');
+        drawPath();
+
+        checkMolecule();
+        resetHintTimer(); // Reset hint timer on every selection
+    }
+
+    // Function to check if the selected elements form a valid molecule
+    function checkMolecule() {
+        if (selectedElements.length < 2) return;
+        
+        const selectedSymbols = selectedElements.map(el => el.element).join('');
+        
+        let found = false;
+        let foundMolecule = null;
+        for (const molecule of todayMolecules) {
+            const moleculeSymbols = molecule.elements.join('');
+            if (selectedSymbols === moleculeSymbols) {
+                found = true;
+                foundMolecule = molecule;
+                break;
+            }
+        }
+        
+        if (found) {
+            handleSuccess(foundMolecule);
+        } else if (selectedElements.length === 8) { // Max length is 7 for Sulfuric Acid
+             clearSelection();
         }
     }
-}
+    
+    // Function to handle a successful molecule
+    function handleSuccess(molecule) {
+        gameActive = false;
+        
+        successSound.currentTime = 0;
+        successSound.play();
+        
+        // Calculate points based on if it's the hard molecule or not
+        let points = hardMolecule && molecule.name === hardMolecule.name ? 100 : selectedElements.length * ELEMENT_SCORE;
+        score += points;
 
-function drawPath() {
-    ctx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
-    drawGrid();
-    if (selectedElements.length < 2) return;
-    ctx.strokeStyle = '#f00';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    const startIndex = selectedElements[0];
-    const startCol = startIndex % gridSize;
-    const startRow = Math.floor(startIndex / gridSize);
-    const startX = startCol * (cellSize + 2) + cellSize / 2;
-    const startY = startRow * (cellSize + 2) + cellSize / 2;
-    ctx.moveTo(startX, startY);
-    for (let i = 1; i < selectedElements.length; i++) {
-        const index = selectedElements[i];
-        const col = index % gridSize;
-        const row = Math.floor(index / gridSize);
-        const x = col * (cellSize + 2) + cellSize / 2;
-        const y = row * (cellSize + 2) + cellSize / 2;
-        ctx.lineTo(x, y);
+        // Check for speed bonus
+        let bonusText = '';
+        if (lastFoundMoleculeTime) {
+            const timeSinceLastFind = (Date.now() - lastFoundMoleculeTime) / 1000;
+            if (timeSinceLastFind <= SPEED_BONUS_TIME_LIMIT) {
+                score += SPEED_BONUS;
+                bonusText = `+${SPEED_BONUS} Speed Bonus!`;
+            }
+        }
+        lastFoundMoleculeTime = Date.now();
+
+
+        if (lastFoundMoleculeName === molecule.name) {
+            currentComboCount++;
+        } else {
+            currentComboCount = 1;
+        }
+
+        let comboBonus = 0;
+        if (currentComboCount > 1) {
+            comboBonus = currentComboCount * COMBO_BONUS_INCREMENT;
+            score += comboBonus;
+            bonusText += (bonusText ? ' & ' : '') + `+${comboBonus} Combo!`;
+        }
+
+        if (bonusText) {
+            showBonusText(bonusText);
+        }
+
+        lastFoundMoleculeName = molecule.name;
+        
+        selectedElements.forEach(el => el.div.classList.add('found'));
+        
+        // Update the tally for the found molecule
+        const molIndex = todayMolecules.findIndex(mol => mol.name === molecule.name);
+        if (molIndex !== -1) {
+            todayMolecules[molIndex].tally++;
+        }
+
+        updateUI();
+        updateMoleculesUI();
+        
+        setTimeout(() => {
+            selectedElements.forEach(el => {
+                el.div.classList.remove('selected', 'found');
+                const newElement = getRandomElement();
+                el.div.innerHTML = `<span class="element-content">${newElement}</span>`;
+                gridData[el.row][el.col] = newElement;
+            });
+            clearSelection();
+            gameActive = true;
+            resetHintTimer();
+        }, 500);
     }
-    ctx.stroke();
-}
+    
+    // Shows a floating combo bonus text
+    function showBonusText(text) {
+        const bonusText = document.createElement('span');
+        bonusText.textContent = text;
+        bonusText.classList.add('combo-text');
+        gameGrid.appendChild(bonusText);
 
-messageButton.addEventListener('click', () => {
-    messageBox.classList.remove('visible');
-    initGame();
-});
+        setTimeout(() => {
+            gameGrid.removeChild(bonusText);
+        }, 1000);
+    }
 
-closeHighScoreButton.addEventListener('click', () => {
-    highScoreBox.classList.remove('visible');
-});
+    // Function to clear the current selection and the line
+    function clearSelection() {
+        selectedElements.forEach(el => el.div.classList.remove('selected'));
+        selectedElements = [];
+        clearCanvas();
+        resetHintTimer(); // Reset hint timer when selection is cleared
+    }
 
-function initGame() {
-    score = 0;
-    timeLeft = GAME_TIME;
-    selectedElements = [];
-    updateUI();
-    generateGrid();
-    validateMoleculeAvailability();
-    gameActive = true;
-    startTimer();
-}
+    // --- Hint & Solvability Check Functions ---
+    
+    function findGridSolutions() {
+        const solutions = [];
+        const moleculeElementStrings = todayMolecules.map(mol => mol.elements.join(''));
+        
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                const startNode = {
+                    element: gridData[row][col],
+                    row: row,
+                    col: col,
+                    div: gameGrid.children[row * COLS + col]
+                };
+                const paths = findPathsFrom(startNode);
+                paths.forEach(path => {
+                    const pathString = path.map(el => el.element).join('');
+                    if (moleculeElementStrings.includes(pathString)) {
+                        solutions.push(path);
+                    }
+                });
+            }
+        }
+        return solutions;
+    }
 
-window.onload = initGame;
+    function findPathsFrom(startNode) {
+        const queue = [[startNode]];
+        const solutions = [];
+
+        while (queue.length > 0) {
+            const currentPath = queue.shift();
+            const lastNode = currentPath[currentPath.length - 1];
+
+            const pathString = currentPath.map(el => el.element).join('');
+            const isPrefix = todayMolecules.some(mol => mol.elements.join('').startsWith(pathString));
+
+            if (!isPrefix) continue; // Prune paths that can't lead to a solution
+
+            const isSolution = todayMolecules.some(mol => mol.elements.join('') === pathString);
+            if (isSolution) {
+                solutions.push(currentPath);
+            }
+
+            const neighbors = getAdjacentElements(lastNode.row, lastNode.col);
+            for (const neighbor of neighbors) {
+                const isVisitedInPath = currentPath.some(el => el.row === neighbor.row && el.col === neighbor.col);
+                if (!isVisitedInPath) {
+                    const newPath = [...currentPath, neighbor];
+                    queue.push(newPath);
+                }
+            }
+        }
+        return solutions;
+    }
+
+
+    function startHintTimer() {
+        if (!gameActive) return;
+        hintTimerInterval = setTimeout(() => {
+            showHint();
+        }, HINT_TIMER_DELAY);
+    }
+
+    function resetHintTimer() {
+        clearTimeout(hintTimerInterval);
+        startHintTimer();
+    }
+    
+    function showHint() {
+        if (selectedElements.length > 0) return; // Don't show hint if player is mid-selection
+
+        const hintPaths = findGridSolutions();
+        if (hintPaths.length > 0) {
+            const hintPath = hintPaths[0]; // Show the first found hint
+            // Visually hint the path
+            hintPath.forEach(el => {
+                const div = gameGrid.children[el.row * COLS + el.col];
+                div.classList.add('hinted');
+            });
+
+            // Draw the hint path on the canvas
+            const originalSelected = [...selectedElements];
+            selectedElements = hintPath;
+            drawPath();
+            selectedElements = originalSelected;
+
+            // Clear the hint after a short time
+            setTimeout(() => {
+                hintPath.forEach(el => {
+                    const div = gameGrid.children[el.row * COLS + el.col];
+                    div.classList.remove('hinted');
+                });
+                clearCanvas();
+                resetHintTimer(); // Restart timer after the hint
+            }, 2000);
+        }
+    }
+
+    /**
+     * Gets all valid adjacent elements (including diagonals).
+     * @param {number} row
+     * @param {number} col
+     * @returns {Array} An array of adjacent element objects.
+     */
+    function getAdjacentElements(row, col) {
+        const neighbors = [];
+        for (let r = row - 1; r <= row + 1; r++) {
+            for (let c = col - 1; c <= col + 1; c++) {
+                // Skip the current element and out-of-bounds elements
+                if (r === row && c === col) continue;
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                    const elementDiv = gameGrid.children[r * COLS + c];
+                    neighbors.push({
+                        element: gridData[r][c],
+                        div: elementDiv,
+                        row: r,
+                        col: c
+                    });
+                }
+            }
+        }
+        return neighbors;
+    }
+    
+    // --- Timer Functions ---
+    
+    // Function to start the game timer
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft < 0) {
+                timeLeft = 0;
+            }
+            updateUI();
+            if (timeLeft === 0) {
+                endGame();
+            }
+        }, 1000);
+    }
+    
+    // Function to end the game
+    function endGame() {
+        clearInterval(timerInterval);
+        clearTimeout(hintTimerInterval);
+        gameActive = false;
+        addHighScore(score);
+        showMessage('Game Over!', `Your final score is: ${score}`);
+    }
+
+    // --- High Score Functions ---
+    
+    // Loads high scores from local storage
+    function loadHighScores() {
+        const storedScores = localStorage.getItem('elementalHighScores');
+        highScores = storedScores ? JSON.parse(storedScores) : [];
+        renderHighScores();
+    }
+    
+    // Saves high scores to local storage
+    function saveHighScores() {
+        localStorage.setItem('elementalHighScores', JSON.stringify(highScores));
+    }
+
+    // Adds a new score to the high score list
+    function addHighScore(newScore) {
+        if (newScore > 0) {
+            highScores.push(newScore);
+            highScores.sort((a, b) => b - a); // Sort descending
+            highScores = highScores.slice(0, HIGH_SCORE_COUNT); // Keep only the top scores
+            saveHighScores();
+            renderHighScores();
+        }
+    }
+    
+    // Renders the high score list in the UI
+    function renderHighScores() {
+        highScoreList.innerHTML = '';
+        if (highScores.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.textContent = 'No scores yet!';
+            highScoreList.appendChild(emptyItem);
+        } else {
+            highScores.forEach((score, index) => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${index + 1}. ${score}`;
+                highScoreList.appendChild(listItem);
+            });
+        }
+    }
+
+    // --- Canvas Drawing Functions ---
+
+    // Function to draw the path line
+    function drawPath() {
+        clearCanvas();
+        if (selectedElements.length < 2) return;
+        
+        const gridRect = gameGrid.getBoundingClientRect();
+        pathCanvas.width = gridRect.width;
+        pathCanvas.height = gridRect.height;
+        pathCanvas.style.top = `${gridRect.top}px`;
+        pathCanvas.style.left = `${gridRect.left}px`;
+
+        ctx.strokeStyle = 'var(--line-color)';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        
+        const firstElementRect = selectedElements[0].div.getBoundingClientRect();
+        const startX = firstElementRect.left + firstElementRect.width / 2 - gridRect.left;
+        const startY = firstElementRect.top + firstElementRect.height / 2 - gridRect.top;
+        ctx.moveTo(startX, startY);
+        
+        for (let i = 1; i < selectedElements.length; i++) {
+            const elRect = selectedElements[i].div.getBoundingClientRect();
+            const x = elRect.left + elRect.width / 2 - gridRect.left;
+            const y = elRect.top + elRect.height / 2 - gridRect.top;
+            ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+    
+    // Function to clear the canvas
+    function clearCanvas() {
+        ctx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+    }
+    
+    // --- Popup Functions ---
+
+    function hideAllPopups() {
+        messageBox.classList.remove('visible');
+        rulesBox.classList.remove('visible');
+        infoBox.classList.remove('visible');
+        highScoreBox.classList.remove('visible');
+    }
+
+    function showMessage(title, text) {
+        hideAllPopups();
+        messageTitle.textContent = title;
+        messageText.textContent = text;
+        messageBox.classList.add('visible');
+    }
+    
+    function showRules() {
+        hideAllPopups();
+        rulesBox.classList.add('visible');
+    }
+
+    function showInfo(molecule) {
+        hideAllPopups();
+        infoTitle.textContent = molecule.name;
+        infoText.textContent = molecule.description;
+        infoBox.classList.add('visible');
+    }
+
+    function showHighScores() {
+        hideAllPopups();
+        renderHighScores(); // Ensure scores are up-to-date before showing
+        highScoreBox.classList.add('visible');
+    }
+
+    // --- Event Listeners ---
+    
+    gameGrid.addEventListener('click', (event) => {
+        const elementDiv = event.target.closest('.element');
+        if (elementDiv) {
+            selectElement(elementDiv);
+        }
+    });
+
+    moleculeList.addEventListener('click', (event) => {
+        const listItem = event.target.closest('li');
+        if (listItem) {
+            const moleculeName = listItem.dataset.moleculeName;
+            const molecule = ALL_MOLECULES.find(mol => mol.name === moleculeName);
+            if (molecule) {
+                showInfo(molecule);
+            }
+        }
+    });
+    
+    resetButton.addEventListener('click', () => {
+        initGame();
+    });
+    
+    messageButton.addEventListener('click', () => {
+        initGame();
+    });
+
+    rulesButton.addEventListener('click', showRules);
+    
+    closeRulesButton.addEventListener('click', () => {
+        hideAllPopups();
+    });
+
+    closeInfoButton.addEventListener('click', () => {
+        hideAllPopups();
+    });
+
+    highScoreButton.addEventListener('click', showHighScores);
+
+    closeHighScoreButton.addEventListener('click', () => {
+        hideAllPopups();
+    });
+    
+    window.addEventListener('resize', () => {
+        drawPath();
+    });
+    
+    window.onload = initGame;
 </script>
+
 </body>
 </html>
